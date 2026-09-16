@@ -18,6 +18,7 @@ function defaultData() {
     ],
     courses: [],
     agenda: [],
+    cards: [],
   };
 }
 
@@ -29,9 +30,16 @@ function load() {
   }
   const raw = fs.readFileSync(DB_PATH, 'utf-8');
   const data = JSON.parse(raw);
-  // Compatibilité avec un fichier existant créé avant l'ajout de l'agenda et
-  // avant le passage au login par code à 6 chiffres (ex mot de passe / WebAuthn).
+  // Compatibilité avec un fichier existant créé avant l'ajout de l'agenda,
+  // des cartes de fidélité, et avant le passage au login par code à 6
+  // chiffres (ex mot de passe / WebAuthn).
   if (!data.agenda) data.agenda = [];
+  if (!data.cards) data.cards = [];
+  for (const card of data.cards) {
+    // Cartes créées avant l'ajout du scan : on leur attribue un format
+    // générique pour qu'elles restent affichables comme code-barres.
+    if (!card.format) card.format = 'CODE_128';
+  }
   for (const user of data.users) {
     if (!user.codeHash) {
       // Ancien compte : on lui attribue le code de démo pour rester utilisable.
