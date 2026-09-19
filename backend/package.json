@@ -9,6 +9,7 @@
     "dev:api": "nodemon server.js",
     "dev:web": "npm start --prefix ../frontend",
     "migrate:firestore": "node scripts/migrate-to-firestore.js",
+    "reset:firestore": "node scripts/reset-firestore.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
