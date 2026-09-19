@@ -30,7 +30,7 @@ app.use('/api', (req, res) => {
 // directement l'app, et toute route inconnue (ex: /home, /login après un
 // rechargement de page) retombe sur index.html pour que le routeur Angular
 // prenne la main, comme il se doit pour une SPA.
-const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist', 'frontend', 'browser');
+const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend',  );
 const FRONTEND_INDEX = path.join(FRONTEND_DIST, 'index.html');
 
 if (fs.existsSync(FRONTEND_INDEX)) {
