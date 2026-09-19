@@ -2,11 +2,12 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { load, save } = require('../data/store');
+const { getDb } = require('../data/firebase');
 const { JWT_SECRET } = require('../config');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+const usersCol = getDb().collection('users');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_RE = /^\d{6}$/;
@@ -19,8 +20,9 @@ function signToken(user) {
   );
 }
 
-function findByEmail(data, email) {
-  return data.users.find((u) => u.email.toLowerCase() === String(email).toLowerCase());
+async function findUserDocByEmail(email) {
+  const snap = await usersCol.where('emailLower', '==', String(email).toLowerCase()).limit(1).get();
+  return snap.empty ? null : snap.docs[0];
 }
 
 /** Code provisoire prévisible pour "code oublié" : la date du jour en JJMMAA. */
@@ -32,19 +34,18 @@ function todaysProvisionalCode() {
 
 // Étape 1 du login : le frontend envoie l'email pour savoir s'il doit
 // proposer de créer un code (nouveau compte) ou de le saisir (compte existant).
-router.post('/check-email', (req, res) => {
+router.post('/check-email', async (req, res) => {
   const { email } = req.body || {};
   if (!email || !EMAIL_RE.test(email)) {
     return res.status(400).json({ message: 'Email invalide' });
   }
 
-  const data = load();
-  const exists = Boolean(findByEmail(data, email));
-  res.json({ exists });
+  const doc = await findUserDocByEmail(email);
+  res.json({ exists: Boolean(doc) });
 });
 
 // Nouveau compte : email + code à 6 chiffres choisi par l'utilisateur.
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const { email, code } = req.body || {};
   if (!email || !EMAIL_RE.test(email)) {
     return res.status(400).json({ message: 'Email invalide' });
@@ -53,20 +54,19 @@ router.post('/register', (req, res) => {
     return res.status(400).json({ message: 'Le code doit contenir 6 chiffres' });
   }
 
-  const data = load();
-  if (findByEmail(data, email)) {
+  if (await findUserDocByEmail(email)) {
     return res.status(409).json({ message: 'Un compte existe déjà avec cet email' });
   }
 
   const user = {
     id: crypto.randomUUID(),
     email,
+    emailLower: email.toLowerCase(),
     codeHash: bcrypt.hashSync(code, 10),
     name: email.split('@')[0],
     mustResetCode: false,
   };
-  data.users.push(user);
-  save(data);
+  await usersCol.doc(user.id).set(user);
 
   const token = signToken(user);
   res.status(201).json({
@@ -76,14 +76,14 @@ router.post('/register', (req, res) => {
 });
 
 // Compte existant : email + code à 6 chiffres pour débloquer l'application.
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, code } = req.body || {};
   if (!email || !code) {
     return res.status(400).json({ message: 'Email et code requis' });
   }
 
-  const data = load();
-  const user = findByEmail(data, email);
+  const doc = await findUserDocByEmail(email);
+  const user = doc?.data();
 
   if (!user || !bcrypt.compareSync(code, user.codeHash)) {
     return res.status(401).json({ message: 'Code incorrect' });
@@ -100,44 +100,41 @@ router.post('/login', (req, res) => {
 // jamais révéler ce format côté client (pas d'envoi d'email dans cette
 // version). Le compte est marqué "à réinitialiser" : la prochaine connexion
 // réussie devra obligatoirement être suivie de la création d'un nouveau code.
-router.post('/forgot', (req, res) => {
+router.post('/forgot', async (req, res) => {
   const { email } = req.body || {};
   if (!email || !EMAIL_RE.test(email)) {
     return res.status(400).json({ message: 'Email invalide' });
   }
 
-  const data = load();
-  const user = findByEmail(data, email);
-  if (!user) {
+  const doc = await findUserDocByEmail(email);
+  if (!doc) {
     return res.status(404).json({ message: 'Aucun compte avec cet email' });
   }
 
   const provisionalCode = todaysProvisionalCode();
-  user.codeHash = bcrypt.hashSync(provisionalCode, 10);
-  user.mustResetCode = true;
-  save(data);
+  await doc.ref.update({
+    codeHash: bcrypt.hashSync(provisionalCode, 10),
+    mustResetCode: true,
+  });
 
   res.json({ ok: true });
 });
 
 // Après une connexion avec le code provisoire, le client doit définir un
 // nouveau code définitif avant de pouvoir continuer à utiliser l'application.
-router.post('/set-code', requireAuth, (req, res) => {
+router.post('/set-code', requireAuth, async (req, res) => {
   const { code } = req.body || {};
   if (!code || !CODE_RE.test(code)) {
     return res.status(400).json({ message: 'Le code doit contenir 6 chiffres' });
   }
 
-  const data = load();
-  const user = data.users.find((u) => u.id === req.user.id);
-  if (!user) {
+  const ref = usersCol.doc(req.user.id);
+  const doc = await ref.get();
+  if (!doc.exists) {
     return res.status(404).json({ message: 'Compte introuvable' });
   }
 
-  user.codeHash = bcrypt.hashSync(code, 10);
-  user.mustResetCode = false;
-  save(data);
-
+  await ref.update({ codeHash: bcrypt.hashSync(code, 10), mustResetCode: false });
   res.json({ ok: true });
 });
 

@@ -101,37 +101,6 @@
       "updatedAt": "2026-09-14T19:08:25.449Z"
     },
     {
-      "id": "b258ff09-0250-4a98-b214-c763360b3db2",
-      "ownerId": "ac98c946-57bb-4e99-ab55-58ba81096527",
-      "title": "bistrot",
-      "note": "",
-      "items": [
-        {
-          "id": "f3a08c9c-e105-45c4-952b-0daaf23b47bc",
-          "name": "carotte",
-          "qty": 1,
-          "price": null,
-          "done": false
-        },
-        {
-          "id": "9d5c378a-585d-4d94-9f70-3888e86d9a8f",
-          "name": "Anna",
-          "qty": 1,
-          "price": null,
-          "done": false
-        },
-        {
-          "id": "6225eb85-0395-41aa-92a8-09a18902c10f",
-          "name": "banane",
-          "qty": 1,
-          "price": null,
-          "done": false
-        }
-      ],
-      "createdAt": "2026-09-14T19:12:29.375Z",
-      "updatedAt": "2026-09-16T07:26:43.515Z"
-    },
-    {
       "id": "a70e1d10-c385-4d58-b56e-abf5416799df",
       "ownerId": "ac98c946-57bb-4e99-ab55-58ba81096527",
       "title": "vsvdsvs",
@@ -147,6 +116,30 @@
       ],
       "createdAt": "2026-09-16T11:13:34.811Z",
       "updatedAt": "2026-09-16T11:13:40.160Z"
+    },
+    {
+      "id": "a5f70e51-9716-4422-94fd-2077b3399d74",
+      "ownerId": "ac98c946-57bb-4e99-ab55-58ba81096527",
+      "title": "et nous",
+      "note": "",
+      "items": [
+        {
+          "id": "7b78d11c-6fb8-4671-b938-588cb8051565",
+          "name": "frites",
+          "qty": 1,
+          "price": null,
+          "done": false
+        },
+        {
+          "id": "5e658e2b-abd2-4916-bb89-427221a1a1d0",
+          "name": "salade",
+          "qty": 1,
+          "price": null,
+          "done": false
+        }
+      ],
+      "createdAt": "2026-09-16T20:34:05.432Z",
+      "updatedAt": "2026-09-16T20:34:05.462Z"
     }
   ],
   "agenda": [

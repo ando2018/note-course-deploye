@@ -8,6 +8,7 @@
     "dev": "concurrently -n API,WEB -c blue.bold,green.bold \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "nodemon server.js",
     "dev:web": "npm start --prefix ../frontend",
+    "migrate:firestore": "node scripts/migrate-to-firestore.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -18,6 +19,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "firebase-admin": "^12.7.0",
     "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {

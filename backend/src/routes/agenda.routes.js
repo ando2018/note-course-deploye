@@ -1,31 +1,33 @@
 const express = require('express');
 const crypto = require('crypto');
-const { load, save } = require('../data/store');
+const { getDb } = require('../data/firebase');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth);
 
-function findEventOrFail(data, id, ownerId, res) {
-  const event = data.agenda.find((e) => e.id === id && e.ownerId === ownerId);
-  if (!event) {
+const agendaCol = getDb().collection('agenda');
+
+async function findEventOrFail(id, ownerId, res) {
+  const doc = await agendaCol.doc(id).get();
+  if (!doc.exists || doc.data().ownerId !== ownerId) {
     res.status(404).json({ message: 'Rendez-vous introuvable' });
     return null;
   }
-  return event;
+  return doc;
 }
 
 // GET /api/agenda - tous les rendez-vous de l'utilisateur, triés par date/heure
-router.get('/', (req, res) => {
-  const data = load();
-  const events = data.agenda
-    .filter((e) => e.ownerId === req.user.id)
+router.get('/', async (req, res) => {
+  const snap = await agendaCol.where('ownerId', '==', req.user.id).get();
+  const events = snap.docs
+    .map((d) => d.data())
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
   res.json(events);
 });
 
 // POST /api/agenda - créer un rendez-vous
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { title, description, date, time } = req.body || {};
   if (!title || !String(title).trim()) {
     return res.status(400).json({ message: 'Le titre est requis' });
@@ -49,48 +51,38 @@ router.post('/', (req, res) => {
     updatedAt: now,
   };
 
-  const data = load();
-  data.agenda.push(event);
-  save(data);
+  await agendaCol.doc(event.id).set(event);
   res.status(201).json(event);
 });
 
 // GET /api/agenda/:id
-router.get('/:id', (req, res) => {
-  const data = load();
-  const event = findEventOrFail(data, req.params.id, req.user.id, res);
-  if (!event) return;
-  res.json(event);
+router.get('/:id', async (req, res) => {
+  const doc = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!doc) return;
+  res.json(doc.data());
 });
 
 // PUT /api/agenda/:id - mise à jour
-router.put('/:id', (req, res) => {
-  const data = load();
-  const event = findEventOrFail(data, req.params.id, req.user.id, res);
-  if (!event) return;
+router.put('/:id', async (req, res) => {
+  const doc = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!doc) return;
 
   const { title, description, date, time } = req.body || {};
-  if (title !== undefined) event.title = String(title).trim();
-  if (description !== undefined) event.description = String(description);
-  if (date !== undefined) event.date = date;
-  if (time !== undefined) event.time = time;
-  event.updatedAt = new Date().toISOString();
+  const changes = { updatedAt: new Date().toISOString() };
+  if (title !== undefined) changes.title = String(title).trim();
+  if (description !== undefined) changes.description = String(description);
+  if (date !== undefined) changes.date = date;
+  if (time !== undefined) changes.time = time;
 
-  save(data);
-  res.json(event);
+  await doc.ref.update(changes);
+  res.json({ ...doc.data(), ...changes });
 });
 
 // DELETE /api/agenda/:id
-router.delete('/:id', (req, res) => {
-  const data = load();
-  const idx = data.agenda.findIndex(
-    (e) => e.id === req.params.id && e.ownerId === req.user.id
-  );
-  if (idx === -1) {
-    return res.status(404).json({ message: 'Rendez-vous introuvable' });
-  }
-  data.agenda.splice(idx, 1);
-  save(data);
+router.delete('/:id', async (req, res) => {
+  const doc = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!doc) return;
+  await doc.ref.delete();
   res.status(204).end();
 });
 

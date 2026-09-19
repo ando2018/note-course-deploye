@@ -1,20 +1,22 @@
 const express = require('express');
 const crypto = require('crypto');
-const { load, save } = require('../data/store');
+const { getDb } = require('../data/firebase');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth);
 
+const cardsCol = getDb().collection('cards');
+
 const MAX_PHOTO_LENGTH = 4 * 1024 * 1024; // ~4 Mo en base64, la photo est déjà compressée côté client
 
-function findCardOrFail(data, id, ownerId, res) {
-  const card = data.cards.find((c) => c.id === id && c.ownerId === ownerId);
-  if (!card) {
+async function findCardOrFail(id, ownerId, res) {
+  const doc = await cardsCol.doc(id).get();
+  if (!doc.exists || doc.data().ownerId !== ownerId) {
     res.status(404).json({ message: 'Carte introuvable' });
     return null;
   }
-  return card;
+  return doc;
 }
 
 function isValidPhoto(photo) {
@@ -22,16 +24,16 @@ function isValidPhoto(photo) {
 }
 
 // GET /api/cards - toutes les cartes de fidélité de l'utilisateur
-router.get('/', (req, res) => {
-  const data = load();
-  const cards = data.cards
-    .filter((c) => c.ownerId === req.user.id)
+router.get('/', async (req, res) => {
+  const snap = await cardsCol.where('ownerId', '==', req.user.id).get();
+  const cards = snap.docs
+    .map((d) => d.data())
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   res.json(cards);
 });
 
 // POST /api/cards - enregistrer une nouvelle carte (code scanné + nom, photo optionnelle)
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, code, format, photo } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ message: 'Le nom de la carte est requis' });
@@ -58,33 +60,31 @@ router.post('/', (req, res) => {
     updatedAt: now,
   };
 
-  const data = load();
-  data.cards.push(card);
-  save(data);
+  await cardsCol.doc(card.id).set(card);
   res.status(201).json(card);
 });
 
 // PUT /api/cards/:id - modifier le nom, le code et/ou la photo
-router.put('/:id', (req, res) => {
-  const data = load();
-  const card = findCardOrFail(data, req.params.id, req.user.id, res);
-  if (!card) return;
+router.put('/:id', async (req, res) => {
+  const doc = await findCardOrFail(req.params.id, req.user.id, res);
+  if (!doc) return;
 
   const { name, code, format, photo } = req.body || {};
+  const changes = { updatedAt: new Date().toISOString() };
   if (name !== undefined) {
     if (!String(name).trim()) {
       return res.status(400).json({ message: 'Le nom de la carte est requis' });
     }
-    card.name = String(name).trim();
+    changes.name = String(name).trim();
   }
   if (code !== undefined) {
     if (!String(code).trim()) {
       return res.status(400).json({ message: 'Le code de la carte est requis' });
     }
-    card.code = String(code).trim();
+    changes.code = String(code).trim();
   }
   if (format !== undefined) {
-    card.format = String(format).trim() || 'CODE_128';
+    changes.format = String(format).trim() || 'CODE_128';
   }
   if (photo !== undefined) {
     if (photo && !isValidPhoto(photo)) {
@@ -93,25 +93,18 @@ router.put('/:id', (req, res) => {
     if (photo && photo.length > MAX_PHOTO_LENGTH) {
       return res.status(413).json({ message: 'Photo trop volumineuse' });
     }
-    card.photo = photo || null;
+    changes.photo = photo || null;
   }
-  card.updatedAt = new Date().toISOString();
 
-  save(data);
-  res.json(card);
+  await doc.ref.update(changes);
+  res.json({ ...doc.data(), ...changes });
 });
 
 // DELETE /api/cards/:id
-router.delete('/:id', (req, res) => {
-  const data = load();
-  const idx = data.cards.findIndex(
-    (c) => c.id === req.params.id && c.ownerId === req.user.id
-  );
-  if (idx === -1) {
-    return res.status(404).json({ message: 'Carte introuvable' });
-  }
-  data.cards.splice(idx, 1);
-  save(data);
+router.delete('/:id', async (req, res) => {
+  const doc = await findCardOrFail(req.params.id, req.user.id, res);
+  if (!doc) return;
+  await doc.ref.delete();
   res.status(204).end();
 });
 
