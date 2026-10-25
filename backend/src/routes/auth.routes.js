@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { getDb } = require('../data/firebase');
+const { getDb, NO_MONGO_ID } = require('../data/mongo');
 const { JWT_SECRET } = require('../config');
 const { requireAuth } = require('../middleware/auth');
 
@@ -20,9 +20,8 @@ function signToken(user) {
   );
 }
 
-async function findUserDocByEmail(email) {
-  const snap = await usersCol.where('emailLower', '==', String(email).toLowerCase()).limit(1).get();
-  return snap.empty ? null : snap.docs[0];
+function findUserByEmail(email) {
+  return usersCol.findOne({ emailLower: String(email).toLowerCase() }, NO_MONGO_ID);
 }
 
 /** Code provisoire prévisible pour "code oublié" : la date du jour en JJMMAA. */
@@ -40,8 +39,8 @@ router.post('/check-email', async (req, res) => {
     return res.status(400).json({ message: 'Email invalide' });
   }
 
-  const doc = await findUserDocByEmail(email);
-  res.json({ exists: Boolean(doc) });
+  const user = await findUserByEmail(email);
+  res.json({ exists: Boolean(user) });
 });
 
 // Nouveau compte : email + code à 6 chiffres choisi par l'utilisateur.
@@ -54,7 +53,7 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ message: 'Le code doit contenir 6 chiffres' });
   }
 
-  if (await findUserDocByEmail(email)) {
+  if (await findUserByEmail(email)) {
     return res.status(409).json({ message: 'Un compte existe déjà avec cet email' });
   }
 
@@ -66,7 +65,8 @@ router.post('/register', async (req, res) => {
     name: email.split('@')[0],
     mustResetCode: false,
   };
-  await usersCol.doc(user.id).set(user);
+  // insertOne ajoute un _id à l'objet passé : on insère une copie.
+  await usersCol.insertOne({ ...user });
 
   const token = signToken(user);
   res.status(201).json({
@@ -82,10 +82,9 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ message: 'Email et code requis' });
   }
 
-  const doc = await findUserDocByEmail(email);
-  const user = doc?.data();
+  const user = await findUserByEmail(email);
 
-  if (!user || !bcrypt.compareSync(code, user.codeHash)) {
+  if (!user || !user.codeHash || !bcrypt.compareSync(code, user.codeHash)) {
     return res.status(401).json({ message: 'Code incorrect' });
   }
 
@@ -106,16 +105,16 @@ router.post('/forgot', async (req, res) => {
     return res.status(400).json({ message: 'Email invalide' });
   }
 
-  const doc = await findUserDocByEmail(email);
-  if (!doc) {
+  const user = await findUserByEmail(email);
+  if (!user) {
     return res.status(404).json({ message: 'Aucun compte avec cet email' });
   }
 
   const provisionalCode = todaysProvisionalCode();
-  await doc.ref.update({
-    codeHash: bcrypt.hashSync(provisionalCode, 10),
-    mustResetCode: true,
-  });
+  await usersCol.updateOne(
+    { id: user.id },
+    { $set: { codeHash: bcrypt.hashSync(provisionalCode, 10), mustResetCode: true } }
+  );
 
   res.json({ ok: true });
 });
@@ -128,13 +127,13 @@ router.post('/set-code', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'Le code doit contenir 6 chiffres' });
   }
 
-  const ref = usersCol.doc(req.user.id);
-  const doc = await ref.get();
-  if (!doc.exists) {
+  const result = await usersCol.updateOne(
+    { id: req.user.id },
+    { $set: { codeHash: bcrypt.hashSync(code, 10), mustResetCode: false } }
+  );
+  if (result.matchedCount === 0) {
     return res.status(404).json({ message: 'Compte introuvable' });
   }
-
-  await ref.update({ codeHash: bcrypt.hashSync(code, 10), mustResetCode: false });
   res.json({ ok: true });
 });
 

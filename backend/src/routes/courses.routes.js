@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../data/firebase');
+const { getDb, NO_MONGO_ID } = require('../data/mongo');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,20 +9,20 @@ router.use(requireAuth);
 const coursesCol = getDb().collection('courses');
 
 async function findCourseOrFail(id, ownerId, res) {
-  const doc = await coursesCol.doc(id).get();
-  if (!doc.exists || doc.data().ownerId !== ownerId) {
+  const course = await coursesCol.findOne({ id, ownerId }, NO_MONGO_ID);
+  if (!course) {
     res.status(404).json({ message: 'Liste de courses introuvable' });
     return null;
   }
-  return doc;
+  return course;
 }
 
 // GET /api/courses - toutes les listes de l'utilisateur
 router.get('/', async (req, res) => {
-  const snap = await coursesCol.where('ownerId', '==', req.user.id).get();
-  const courses = snap.docs
-    .map((d) => d.data())
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const courses = await coursesCol
+    .find({ ownerId: req.user.id }, NO_MONGO_ID)
+    .sort({ updatedAt: -1 })
+    .toArray();
   res.json(courses);
 });
 
@@ -44,43 +44,44 @@ router.post('/', async (req, res) => {
     updatedAt: now,
   };
 
-  await coursesCol.doc(course.id).set(course);
+  // insertOne ajoute un _id à l'objet passé : on insère une copie.
+  await coursesCol.insertOne({ ...course });
   res.status(201).json(course);
 });
 
 // GET /api/courses/:id
 router.get('/:id', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
-  res.json(doc.data());
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
+  res.json(course);
 });
 
 // PUT /api/courses/:id - mise à jour titre / note
 router.put('/:id', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
 
   const { title, note } = req.body || {};
   const changes = { updatedAt: new Date().toISOString() };
   if (title !== undefined) changes.title = String(title).trim();
   if (note !== undefined) changes.note = note;
 
-  await doc.ref.update(changes);
-  res.json({ ...doc.data(), ...changes });
+  await coursesCol.updateOne({ id: course.id }, { $set: changes });
+  res.json({ ...course, ...changes });
 });
 
 // DELETE /api/courses/:id
 router.delete('/:id', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
-  await doc.ref.delete();
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
+  await coursesCol.deleteOne({ id: course.id });
   res.status(204).end();
 });
 
 // POST /api/courses/:id/items - ajouter un item
 router.post('/:id/items', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
 
   const { name, qty, price } = req.body || {};
   if (!name || !String(name).trim()) {
@@ -95,18 +96,18 @@ router.post('/:id/items', async (req, res) => {
     done: false,
   };
 
-  const items = [...doc.data().items, item];
+  const items = [...course.items, item];
   const updatedAt = new Date().toISOString();
-  await doc.ref.update({ items, updatedAt });
-  res.status(201).json({ ...doc.data(), items, updatedAt });
+  await coursesCol.updateOne({ id: course.id }, { $set: { items, updatedAt } });
+  res.status(201).json({ ...course, items, updatedAt });
 });
 
 // PUT /api/courses/:id/items/:itemId - modifier un item
 router.put('/:id/items/:itemId', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
 
-  const items = doc.data().items;
+  const items = course.items;
   const idx = items.findIndex((i) => i.id === req.params.itemId);
   if (idx === -1) {
     return res.status(404).json({ message: 'Article introuvable' });
@@ -122,16 +123,16 @@ router.put('/:id/items/:itemId', async (req, res) => {
   const newItems = [...items];
   newItems[idx] = item;
   const updatedAt = new Date().toISOString();
-  await doc.ref.update({ items: newItems, updatedAt });
-  res.json({ ...doc.data(), items: newItems, updatedAt });
+  await coursesCol.updateOne({ id: course.id }, { $set: { items: newItems, updatedAt } });
+  res.json({ ...course, items: newItems, updatedAt });
 });
 
 // PATCH /api/courses/:id/items/:itemId/toggle - bascule statut (double-clic)
 router.patch('/:id/items/:itemId/toggle', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
 
-  const items = doc.data().items;
+  const items = course.items;
   const idx = items.findIndex((i) => i.id === req.params.itemId);
   if (idx === -1) {
     return res.status(404).json({ message: 'Article introuvable' });
@@ -140,24 +141,24 @@ router.patch('/:id/items/:itemId/toggle', async (req, res) => {
   const newItems = [...items];
   newItems[idx] = { ...newItems[idx], done: !newItems[idx].done };
   const updatedAt = new Date().toISOString();
-  await doc.ref.update({ items: newItems, updatedAt });
-  res.json({ ...doc.data(), items: newItems, updatedAt });
+  await coursesCol.updateOne({ id: course.id }, { $set: { items: newItems, updatedAt } });
+  res.json({ ...course, items: newItems, updatedAt });
 });
 
 // DELETE /api/courses/:id/items/:itemId
 router.delete('/:id/items/:itemId', async (req, res) => {
-  const doc = await findCourseOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const course = await findCourseOrFail(req.params.id, req.user.id, res);
+  if (!course) return;
 
-  const items = doc.data().items;
+  const items = course.items;
   const newItems = items.filter((i) => i.id !== req.params.itemId);
   if (newItems.length === items.length) {
     return res.status(404).json({ message: 'Article introuvable' });
   }
 
   const updatedAt = new Date().toISOString();
-  await doc.ref.update({ items: newItems, updatedAt });
-  res.json({ ...doc.data(), items: newItems, updatedAt });
+  await coursesCol.updateOne({ id: course.id }, { $set: { items: newItems, updatedAt } });
+  res.json({ ...course, items: newItems, updatedAt });
 });
 
 module.exports = router;

@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../data/firebase');
+const { getDb, NO_MONGO_ID } = require('../data/mongo');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,20 +9,20 @@ router.use(requireAuth);
 const agendaCol = getDb().collection('agenda');
 
 async function findEventOrFail(id, ownerId, res) {
-  const doc = await agendaCol.doc(id).get();
-  if (!doc.exists || doc.data().ownerId !== ownerId) {
+  const event = await agendaCol.findOne({ id, ownerId }, NO_MONGO_ID);
+  if (!event) {
     res.status(404).json({ message: 'Rendez-vous introuvable' });
     return null;
   }
-  return doc;
+  return event;
 }
 
 // GET /api/agenda - tous les rendez-vous de l'utilisateur, triés par date/heure
 router.get('/', async (req, res) => {
-  const snap = await agendaCol.where('ownerId', '==', req.user.id).get();
-  const events = snap.docs
-    .map((d) => d.data())
-    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  const events = await agendaCol
+    .find({ ownerId: req.user.id }, NO_MONGO_ID)
+    .sort({ date: 1, time: 1 })
+    .toArray();
   res.json(events);
 });
 
@@ -51,21 +51,22 @@ router.post('/', async (req, res) => {
     updatedAt: now,
   };
 
-  await agendaCol.doc(event.id).set(event);
+  // insertOne ajoute un _id à l'objet passé : on insère une copie.
+  await agendaCol.insertOne({ ...event });
   res.status(201).json(event);
 });
 
 // GET /api/agenda/:id
 router.get('/:id', async (req, res) => {
-  const doc = await findEventOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
-  res.json(doc.data());
+  const event = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!event) return;
+  res.json(event);
 });
 
 // PUT /api/agenda/:id - mise à jour
 router.put('/:id', async (req, res) => {
-  const doc = await findEventOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
+  const event = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!event) return;
 
   const { title, description, date, time } = req.body || {};
   const changes = { updatedAt: new Date().toISOString() };
@@ -74,15 +75,15 @@ router.put('/:id', async (req, res) => {
   if (date !== undefined) changes.date = date;
   if (time !== undefined) changes.time = time;
 
-  await doc.ref.update(changes);
-  res.json({ ...doc.data(), ...changes });
+  await agendaCol.updateOne({ id: event.id }, { $set: changes });
+  res.json({ ...event, ...changes });
 });
 
 // DELETE /api/agenda/:id
 router.delete('/:id', async (req, res) => {
-  const doc = await findEventOrFail(req.params.id, req.user.id, res);
-  if (!doc) return;
-  await doc.ref.delete();
+  const event = await findEventOrFail(req.params.id, req.user.id, res);
+  if (!event) return;
+  await agendaCol.deleteOne({ id: event.id });
   res.status(204).end();
 });
 

@@ -4,12 +4,12 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "dev": "concurrently -n API,WEB -c blue.bold,green.bold \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "nodemon server.js",
+    "dev:api": "nodemon --exec \"node --env-file-if-exists=.env\" server.js",
     "dev:web": "npm start --prefix ../frontend",
-    "migrate:firestore": "node scripts/migrate-to-firestore.js",
-    "reset:firestore": "node scripts/reset-firestore.js",
+    "migrate:mongo": "node --env-file-if-exists=.env scripts/migrate-firestore-to-mongo.js",
+    "reset:mongo": "node --env-file-if-exists=.env scripts/reset-mongo.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -21,7 +21,8 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "firebase-admin": "^12.7.0",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.7.0"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
