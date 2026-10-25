@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["src/app/features/home/cards-tab/sheets/card-view-sheet.scss"],
+  "sourcesContent": [".barcode-box {\n  width: 100%;\n  min-height: 140px;\n  background: #ffffff;\n  border-radius: 16px;\n  padding: 16px 10px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  box-shadow: 0 2px 12px rgba(63, 107, 82, 0.1);\n}\n\n.barcode-box__svg {\n  width: 100%;\n  height: auto;\n  max-height: 130px;\n}\n\n.barcode-box__qr {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.barcode-box__fallback {\n  margin: 0;\n  font-family: 'Quicksand', sans-serif;\n  font-weight: 700;\n  font-size: 22px;\n  letter-spacing: 0.04em;\n  color: #10201a;\n  text-align: center;\n}\n\n.barcode-box__code {\n  margin: 0;\n  text-align: center;\n  font-family: 'Quicksand', sans-serif;\n  font-weight: 700;\n  font-size: 15px;\n  letter-spacing: 0.05em;\n  color: #33503f;\n}\n"],
+  "mappings": ";AAAA,CAAA;AACE,SAAA;AACA,cAAA;AACA,cAAA;AACA,iBAAA;AACA,WAAA,KAAA;AACA,WAAA;AACA,eAAA;AACA,mBAAA;AACA,cAAA,EAAA,IAAA,KAAA,KAAA,EAAA,EAAA,GAAA,EAAA,EAAA,EAAA;;AAGF,CAAA;AACE,SAAA;AACA,UAAA;AACA,cAAA;;AAGF,CAAA;AACE,WAAA;AACA,eAAA;AACA,mBAAA;;AAGF,CAAA;AACE,UAAA;AACA,eAAA,WAAA,EAAA;AACA,eAAA;AACA,aAAA;AACA,kBAAA;AACA,SAAA;AACA,cAAA;;AAGF,CAAA;AACE,UAAA;AACA,cAAA;AACA,eAAA,WAAA,EAAA;AACA,eAAA;AACA,aAAA;AACA,kBAAA;AACA,SAAA;;",
+  "names": []
+}

@@ -5,9 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
+    "build": "npm run build --prefix ../frontend",
     "dev": "concurrently -n API,WEB -c blue.bold,green.bold \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "nodemon --exec \"node --env-file-if-exists=.env\" server.js",
-    "dev:web": "npm start --prefix ../frontend",
+    "dev:web": "npm run watch --prefix ../frontend",
     "migrate:mongo": "node --env-file-if-exists=.env scripts/migrate-firestore-to-mongo.js",
     "reset:mongo": "node --env-file-if-exists=.env scripts/reset-mongo.js",
     "test": "echo \"Error: no test specified\" && exit 1"

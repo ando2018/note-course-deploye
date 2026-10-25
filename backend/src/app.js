@@ -26,29 +26,32 @@ app.use('/api', (req, res) => {
   res.status(404).json({ message: 'Route introuvable' });
 });
 
-// Sert le build Angular (frontend/dist/frontend/browser) : urlapi/ ouvre
-// directement l'app, et toute route inconnue (ex: /home, /login après un
-// rechargement de page) retombe sur index.html pour que le routeur Angular
-// prenne la main, comme il se doit pour une SPA.
+// Sert le build Angular (frontend/dist/frontend/browser) sur le même port
+// que l'API : urlapi/ ouvre directement l'app, et toute route inconnue (ex:
+// /home, /login après un rechargement de page) retombe sur index.html pour
+// que le routeur Angular prenne la main, comme il se doit pour une SPA.
+//
+// La présence du build est vérifiée à chaque requête et non une seule fois
+// au démarrage : en dev, `ng build --watch` peut finir après le lancement de
+// l'API (et recrée le dossier à chaque rebuild).
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist', 'frontend', 'browser');
 const FRONTEND_INDEX = path.join(FRONTEND_DIST, 'index.html');
 
-if (fs.existsSync(FRONTEND_INDEX)) {
-  app.use(express.static(FRONTEND_DIST));
-  // Express 5 (path-to-regexp v8) exige un joker nommé : '*' seul n'est
-  // plus valide, il faut '/*splat'.
-  app.get('/*splat', (req, res) => {
-    res.sendFile(FRONTEND_INDEX);
-  });
-} else {
-  console.warn(
-    `[frontend] Build introuvable (${FRONTEND_DIST}). ` +
-      "Lancez `npm run build` dans frontend/ pour que le backend serve l'app."
-  );
-  app.use((req, res) => {
-    res.status(404).json({ message: 'Route introuvable' });
-  });
-}
+app.use(express.static(FRONTEND_DIST));
+// Express 5 (path-to-regexp v8) exige un joker nommé : '*' seul n'est plus
+// valide, il faut '/*splat'.
+app.get('/*splat', (req, res) => {
+  if (!fs.existsSync(FRONTEND_INDEX)) {
+    return res
+      .status(503)
+      .send("Build Angular introuvable : lancez `npm run dev` (ou `npm run build`) dans backend/.");
+  }
+  res.sendFile(FRONTEND_INDEX);
+});
+
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route introuvable' });
+});
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

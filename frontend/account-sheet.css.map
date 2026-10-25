@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["src/app/features/home/account-sheet/account-sheet.scss"],
+  "sourcesContent": [".account-row {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  padding: 10px 4px 18px;\n\n  > mat-icon {\n    color: #6b8577;\n    flex-shrink: 0;\n  }\n}\n\n.account-row__text {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n}\n\n.account-row__title {\n  font-weight: 600;\n  color: #33503f;\n  font-size: 14px;\n  overflow-wrap: anywhere;\n}\n\n.account-row__status {\n  font-size: 12px;\n  color: #8ba397;\n}\n"],
+  "mappings": ";AAAA,CAAA;AACE,WAAA;AACA,eAAA;AACA,OAAA;AACA,WAAA,KAAA,IAAA;;AAEA,CANF,YAME,EAAA;AACE,SAAA;AACA,eAAA;;AAIJ,CAAA;AACE,QAAA;AACA,WAAA;AACA,kBAAA;AACA,aAAA;;AAGF,CAAA;AACE,eAAA;AACA,SAAA;AACA,aAAA;AACA,iBAAA;;AAGF,CAAA;AACE,aAAA;AACA,SAAA;;",
+  "names": []
+}
